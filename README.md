@@ -6,6 +6,7 @@
 <br>
 <br>
 
+<!-- eleclove = electronic + clove (one of the SPICEs) -->
 <!-- TODO: Add screenshots here -->
 
 ## 使い方
@@ -30,3 +31,5 @@ pnpm install
 source .venv/bin/activate
 python -m eleclove
 ```
+
+PDM の代わりに `requirements.txt` を使って依存関係をインストールすることもできます。
