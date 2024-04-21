@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "ncu": "pnpm update --recursive --interactive",
+    "ncu:latest": "pnpm update --recursive --interactive --latest"
+  },
+  "devDependencies": {
+    "husky": "^9.0.7",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.4"
+  },
+  "lint-staged": {
+    "pdm.lock": [
+      ".venv/bin/python3 tools/pdm_export.py --check"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+[project]
+name = "eleclove"
+version = "0.1.0"
+
+requires-python = "~=3.10.11"
+dependencies = [
+    "json5~=0.9",
+    "matplotlib~=3.8",
+    "numpy~=1.26",
+    "torch~=2.2",
+    "tqdm~=4.66",
+]
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "autoflake~=2.2",
+    "ipykernel~=6.29",
+    "isort~=5.13",
+    "yapf~=0.40",
+]
+
+[[tool.pdm.source]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+verify_ssl = true
+
+[tool.pdm.scripts]
+export = {composite = ["pdm install", "tools/pdm_export.py"]}
+format = "tools/format.py"
+
+[tool.pdm.build]
+package-dir = "."
+
+[tool.yapf]
+based_on_style = "yapf"
+blank_line_before_nested_class_or_def = false
+blank_lines_around_top_level_definition = 1
+column_limit = 160
+join_multiple_lines = true
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

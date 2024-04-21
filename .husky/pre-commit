@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+npm exec lint-staged -- --quiet
+.venv/bin/python3 tools/check_author.py
