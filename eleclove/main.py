@@ -107,7 +107,7 @@ class LinearEqs:
     return f"LinearEqs({list(names)}\na=\n{a}, \nb={b}, \n)"
 
 class Element(Protocol):
-  def modify_eqs(self, eqs: LinearEqs):
+  def modify_eqs(self, eqs: LinearEqs, sol: Optional[Solution], dt: float):
     ...
 
 class Component(Protocol):
@@ -125,7 +125,7 @@ class Circuit:
     eqs = LinearEqs()
     for component in self._components:
       for element in component.elements(sol, dt):
-        element.modify_eqs(eqs)
+        element.modify_eqs(eqs, sol, dt)
     # TODO: 前回の計算で使った NpArray を再利用する
     return eqs.solve()
 
@@ -135,13 +135,13 @@ class Resistor(Element, Component):
     self._neg = neg
     self._value = value
 
-  def modify_eqs(self, eqs: LinearEqs):
+  def modify_eqs(self, eqs, sol, dt):
     eqs.add_a(self._pos, self._pos, 1 / self._value)
     eqs.add_a(self._neg, self._neg, 1 / self._value)
     eqs.add_a(self._pos, self._neg, -1 / self._value)
     eqs.add_a(self._neg, self._pos, -1 / self._value)
 
-  def elements(self, sol: Optional[Solution], dt: float):
+  def elements(self, sol, dt):
     return [self]
 
 class CurrentSource(Element, Component):
@@ -150,11 +150,11 @@ class CurrentSource(Element, Component):
     self._neg = neg
     self._value = value
 
-  def modify_eqs(self, eqs: LinearEqs):
+  def modify_eqs(self, eqs, sol, dt):
     eqs.add_b(self._pos, -self._value)
     eqs.add_b(self._neg, self._value)
 
-  def elements(self, sol: Optional[Solution], dt: float):
+  def elements(self, sol, dt):
     return [self]
 
 class VoltageSource(Element, Component):
@@ -164,14 +164,14 @@ class VoltageSource(Element, Component):
     self._inode = inode if inode is not None else INode()
     self._value = value
 
-  def modify_eqs(self, eqs: LinearEqs):
+  def modify_eqs(self, eqs, sol, dt):
     eqs.add_a(self._inode, self._pos, 1)
     eqs.add_a(self._pos, self._inode, 1)
     eqs.add_a(self._inode, self._neg, -1)
     eqs.add_a(self._neg, self._inode, -1)
     eqs.add_b(self._inode, self._value)
 
-  def elements(self, sol: Optional[Solution], dt: float):
+  def elements(self, sol, dt):
     return [self]
 
 class Capacitor(Component):
@@ -180,7 +180,7 @@ class Capacitor(Component):
     self._neg = neg
     self._value = value
 
-  def elements(self, sol: Optional[Solution], dt: float):
+  def elements(self, sol, dt):
     v_diff = 0 if sol is None else sol[self._pos] - sol[self._neg]
     g = self._value / dt
     return [
@@ -196,13 +196,34 @@ class Inductor(Component):
     self._inode = INode()
     self._value = value
 
-  def elements(self, sol: Optional[Solution], dt: float):
+  def elements(self, sol, dt):
     i = 0 if sol is None else sol[self._inode]
     r = self._value / dt
     return [
         VoltageSource(self._pos, self._node, -r * i, self._inode),
         Resistor(self._node, self._neg, r),
     ]
+
+class Inductor_Ex10(Element, Component):  # example 10 再実装
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float, inode: Optional[INode] = None):
+    self._pos = pos
+    self._neg = neg
+    self._inode = inode if inode is not None else INode()
+    self._value = value
+
+  def modify_eqs(self, eqs, sol, dt):
+    i = 0 if sol is None else sol[self._inode]
+    r = self._value / dt
+    v = r * i
+    eqs.add_a(self._inode, self._pos, 1)
+    eqs.add_a(self._pos, self._inode, 1)
+    eqs.add_a(self._inode, self._neg, -1)
+    eqs.add_a(self._neg, self._inode, -1)
+    eqs.add_a(self._inode, self._inode, -r)
+    eqs.add_b(self._inode, -v)
+
+  def elements(self, sol, dt):
+    return [self]
 
 if __name__ == "__main__":
   # 直列抵抗でためしてみる
@@ -226,20 +247,20 @@ if __name__ == "__main__":
   circuit.add(Resistor(va, vb, 1))
   circuit.add(Capacitor(vb, gnd, 1))
 
-  vb_list: list[float] = []
+  v_list = []
   sol: Optional[Solution] = None
   for _ in range(100):
     sol = circuit.solve(sol, 0.1)
-    vb_list.append(sol[vb])
-  plt.plot(vb_list)
+    v_list.append(sol[vb])
+  plt.plot(v_list)
   plt.show()
 
-  vb_list: list[float] = []
+  v_list = []
   sol: Optional[Solution] = None
   for _ in range(10000):
     sol = circuit.solve(sol, 0.001)
-    vb_list.append(sol[vb])
-  plt.plot(vb_list)
+    v_list.append(sol[vb])
+  plt.plot(v_list)
   plt.show()
 
   # インダクタでためしてみる
@@ -251,12 +272,12 @@ if __name__ == "__main__":
   circuit.add(Resistor(va, vb, 1))
   circuit.add(Inductor(vb, gnd, 1))
 
-  vb_list: list[float] = []
+  v_list = []
   sol: Optional[Solution] = None
   for _ in range(100):
     sol = circuit.solve(sol, 0.1)
-    vb_list.append(sol[vb])
-  plt.plot(vb_list)
+    v_list.append(sol[vb])
+  plt.plot(v_list)
   plt.show()
 
   # ... いい感じ！
