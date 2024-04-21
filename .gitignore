@@ -3,6 +3,8 @@
 .env.production
 .pdm-python
 
+/profile
+
 # auto generated
 __pycache__/
 .ipynb_checkpoints/

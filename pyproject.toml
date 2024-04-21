@@ -14,6 +14,7 @@ dependencies = [
 [tool.pdm.dev-dependencies]
 dev = [
     "autoflake~=2.2",
+    "gprof2dot~=2022.7",
     "ipykernel~=6.29",
     "isort~=5.13",
     "pytest~=8.1",
@@ -28,6 +29,7 @@ verify_ssl = true
 [tool.pdm.scripts]
 export = {composite = ["pdm install", "tools/pdm_export.py"]}
 format = "tools/format.py"
+profile = "tools/profile.py"
 
 [tool.pdm.build]
 package-dir = "."
