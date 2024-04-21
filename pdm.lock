@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:e346a241f6ff6387f87b5840e1e446725f975acc67db88414347def42e356e28"
+content_hash = "sha256:e5ab03e31ab00ed4fd5dd88edc0848076a4b1982bec76786d90eebe38409702c"
 
 [[package]]
 name = "appnope"
@@ -223,6 +223,17 @@ groups = ["default"]
 files = [
     {file = "fsspec-2024.3.1-py3-none-any.whl", hash = "sha256:918d18d41bf73f0e2b261824baeb1b124bcf771767e3a26425cd7dec3332f512"},
     {file = "fsspec-2024.3.1.tar.gz", hash = "sha256:f39780e282d7d117ffb42bb96992f8a90795e4d0fb0f661a70ca39fe9c43ded9"},
+]
+
+[[package]]
+name = "gprof2dot"
+version = "2022.7.29"
+requires_python = ">=2.7"
+summary = "Generate a dot graph from the output of several profilers."
+groups = ["dev"]
+files = [
+    {file = "gprof2dot-2022.7.29-py2.py3-none-any.whl", hash = "sha256:f165b3851d3c52ee4915eb1bd6cca571e5759823c2cd0f71a79bda93c2dc85d6"},
+    {file = "gprof2dot-2022.7.29.tar.gz", hash = "sha256:45b4d298bd36608fccf9511c3fd88a773f7a1abc04d6cd39445b11ba43133ec5"},
 ]
 
 [[package]]
