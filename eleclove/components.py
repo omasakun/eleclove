@@ -10,10 +10,10 @@ class Resistor(Element):
   def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
     self._pos = pos
     self._neg = neg
-    self._value = value
+    self.value = value
 
   def modify_eqs(self, eqs, sol, dt):
-    g = 1 / self._value
+    g = 1 / self.value
     eqs.add_a(self._pos, self._pos, g)
     eqs.add_a(self._neg, self._neg, g)
     eqs.add_a(self._pos, self._neg, -g)
@@ -23,35 +23,35 @@ class CurrentSource(Element):
   def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
     self._pos = pos
     self._neg = neg
-    self._value = value
+    self.value = value
 
   def modify_eqs(self, eqs, sol, dt):
-    eqs.add_b(self._pos, -self._value)
-    eqs.add_b(self._neg, self._value)
+    eqs.add_b(self._pos, -self.value)
+    eqs.add_b(self._neg, self.value)
 
 class VoltageSource(Element):
   def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float, inode: Optional[INode] = None):
     self._pos = pos
     self._neg = neg
     self._inode = inode if inode is not None else INode()
-    self._value = value
+    self.value = value
 
   def modify_eqs(self, eqs, sol, dt):
     eqs.add_a(self._inode, self._pos, 1)
     eqs.add_a(self._pos, self._inode, 1)
     eqs.add_a(self._inode, self._neg, -1)
     eqs.add_a(self._neg, self._inode, -1)
-    eqs.add_b(self._inode, self._value)
+    eqs.add_b(self._inode, self.value)
 
 class Capacitor(Component):
   def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
     self._pos = pos
     self._neg = neg
-    self._value = value
+    self.value = value
 
   def expand(self, sol, dt):
     v_diff = 0 if sol is None else sol[self._pos] - sol[self._neg]
-    g = self._value / dt
+    g = self.value / dt
     return [
         CurrentSource(self._pos, self._neg, -g * v_diff),
         Resistor(self._pos, self._neg, 1 / g),
@@ -63,11 +63,11 @@ class Inductor(Component):
     self._neg = neg
     self._node = VNode()
     self._inode = INode()
-    self._value = value
+    self.value = value
 
   def expand(self, sol, dt):
     i = 0 if sol is None else sol[self._inode]
-    r = self._value / dt
+    r = self.value / dt
     return [
         VoltageSource(self._pos, self._node, -r * i, self._inode),
         Resistor(self._node, self._neg, r),
