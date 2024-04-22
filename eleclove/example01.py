@@ -5,14 +5,15 @@ from typing import Optional
 import numpy as np
 from matplotlib import pyplot as plt
 
-from eleclove.main import (Capacitor, Circuit, Component, CurrentSource, Inductor, Resistor, Solution, VGround, VNode, VNodeFull)
+from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
+from eleclove.core import (Circuit, Component, Solution, VGround, VNode, VNodeFull)
 
 class CustomResistor(Component):
   def __init__(self, pos: VNodeFull, neg: VNodeFull):
     self._pos = pos
     self._neg = neg
 
-  def elements(self, sol, dt):
+  def expand(self, sol, dt):
     v = 0 if sol is None else sol[self._pos] - sol[self._neg]
     i = -0.05 * v + 0.1 * v**3
     return [
@@ -24,7 +25,7 @@ class WhiteNoise(Component):
     self._pos = pos
     self._neg = neg
 
-  def elements(self, sol, dt):
+  def expand(self, sol, dt):
     i = 10e-6 * np.random.randn()
     return [
         CurrentSource(self._pos, self._neg, i),
