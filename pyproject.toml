@@ -10,11 +10,6 @@ dependencies = [
     "tqdm~=4.66",
 ]
 
-[project.optional-dependencies]
-torch = [
-    "torch~=2.2",
-]
-
 [tool.pdm.dev-dependencies]
 dev = [
     "autoflake~=2.2",
@@ -24,11 +19,6 @@ dev = [
     "pytest~=8.1",
     "yapf~=0.40",
 ]
-
-[[tool.pdm.source]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
-verify_ssl = true
 
 [tool.pdm.scripts]
 export = {composite = ["pdm install", "tools/pdm_export.py"]}
