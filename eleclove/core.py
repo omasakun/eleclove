@@ -2,6 +2,7 @@
 
 # あとで整理する
 # まずは性能を無視して開発して、あとから最適化する
+# TODO: ニュートン法とか使う、収束判定、可変時間ステップ
 
 from typing import (Any, Optional, OrderedDict, Protocol, Sequence, TypeGuard, Union)
 
