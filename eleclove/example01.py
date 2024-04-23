@@ -76,7 +76,11 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
   return fig1, fig2
 
 def _main():
-  iface = gr.Interface(
+  # use global variable 'demo'
+  # see: https://www.gradio.app/guides/developing-faster-with-reload-mode
+  global demo
+
+  demo = gr.Interface(
       fn=simulate,
       inputs=[
           gr.Slider(value=100, maximum=1000, label="Time [ps]"),
@@ -92,6 +96,6 @@ def _main():
       ],
       live=True,
   )
-  iface.launch()
+  demo.launch()
 
 if __name__ == "__main__": _main()
