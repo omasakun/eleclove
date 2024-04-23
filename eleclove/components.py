@@ -2,8 +2,6 @@
 
 from typing import Optional
 
-from matplotlib import pyplot as plt
-
 from eleclove.core import (Circuit, Component, Element, INode, Solution, VGround, VNode, VNodeFull)
 
 class Resistor(Element):
@@ -73,7 +71,9 @@ class Inductor(Component):
         Resistor(self._node, self._neg, r),
     ]
 
-if __name__ == "__main__":
+def _main():
+  from matplotlib import pyplot as plt
+
   # 直列抵抗でためしてみる
   circuit = Circuit()
   gnd = VGround()
@@ -129,3 +129,5 @@ if __name__ == "__main__":
   plt.show()
 
   # ... いい感じ！
+
+if __name__ == "__main__": _main()

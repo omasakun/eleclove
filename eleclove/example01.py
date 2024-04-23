@@ -75,7 +75,7 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
 
   return fig1, fig2
 
-if __name__ == "__main__":
+def _main():
   iface = gr.Interface(
       fn=simulate,
       inputs=[
@@ -93,3 +93,5 @@ if __name__ == "__main__":
       live=True,
   )
   iface.launch()
+
+if __name__ == "__main__": _main()
