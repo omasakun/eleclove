@@ -69,6 +69,7 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
   ax.set_ylabel("Voltage [V]")
 
   fig2, ax = plt.subplots()
+  ax.set_title(f"Peak: {freq[np.argmax(np.abs(fft))]*1e-12:.2f} THz")
   ax.loglog(freq, np.abs(fft))
   ax.set_xlabel("Frequency [Hz]")
   ax.set_ylabel("Magnitude")
@@ -84,7 +85,7 @@ def _main():
       fn=simulate,
       inputs=[
           gr.Slider(value=100, maximum=1000, label="Time [ps]"),
-          gr.Slider(value=10.15, label="Resistor [Ω]"),
+          gr.Slider(value=100, maximum=10000, label="Resistor [Ω]"),
           gr.Slider(value=50, label="Capacitor [pF]"),
           gr.Slider(value=5, label="Inductor [fH]"),
           gr.Slider(value=1, label="Noise [μV]"),
