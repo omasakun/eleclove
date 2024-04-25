@@ -2,19 +2,20 @@
 
 from typing import Optional
 
-import gradio as gr
 import numpy as np
 from matplotlib import pyplot as plt
 
 from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
-from eleclove.core import (Circuit, Component, Solution, VGround, VNode, VNodeFull)
+from eleclove.core import (Circuit, Component, Rand, Solution, VGround, VNode, VNodeFull)
+from eleclove.utils import run_on_cpu
 
 class CustomResistor(Component):
   def __init__(self, pos: VNodeFull, neg: VNodeFull):
     self._pos = pos
     self._neg = neg
 
-  def expand(self, sol, dt, t):
+  def expand(self, state):
+    sol = state.sol
     v = 0 if sol is None else sol[self._pos] - sol[self._neg]
     i = -0.05 * v + 0.1 * v**3
     return [
@@ -27,13 +28,14 @@ class WhiteNoise(Component):
     self._neg = neg
     self.value = value
 
-  def expand(self, sol, dt, t):
-    i = self.value * np.random.randn()
+  def expand(self, state):
+    rand = state.rand
+    i = rand.randn() * self.value
     return [
         CurrentSource(self._pos, self._neg, i),
     ]
 
-def simulate(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
+def example01(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
   circuit = Circuit()
   gnd = VGround()
 
@@ -48,14 +50,19 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
 
   dt = 10e-15
   t_list = []
-  va_list = []
+  sol_list = []
   sol: Optional[Solution] = None
+  rand = Rand.seed(137)
   for i in range(int(time * 1e-12 / dt)):
-    sol = circuit.solve(sol, dt, i * dt)
+    sol, rand = circuit.solve(sol, dt, i * dt, rand)
     t_list.append(i * dt)
-    va_list.append(sol[va])
+    sol_list.append(sol)
 
-  va_list = np.array(va_list)
+  # jax array の値の取得は遅いので numpy array に変換する
+  # あと、 python list から jax array への変換も遅かった
+  sol_list = [sol.to_numpy() for sol in sol_list]
+  va_list = np.array([sol[va] for sol in sol_list])
+
   window = np.hanning(len(va_list))
 
   freq = np.fft.fftfreq(len(va_list), d=dt)
@@ -77,12 +84,16 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
   return fig1, fig2
 
 def _main():
+  import gradio as gr
+
   # use global variable 'demo'
   # see: https://www.gradio.app/guides/developing-faster-with-reload-mode
   global demo
 
+  run_on_cpu()
+
   demo = gr.Interface(
-      fn=simulate,
+      fn=example01,
       inputs=[
           gr.Slider(value=100, maximum=1000, label="Time [ps]"),
           gr.Slider(value=100, maximum=10000, label="Resistor [Ω]"),

@@ -5,6 +5,7 @@ version = "0.1.0"
 requires-python = "~=3.10.11"
 dependencies = [
     "numpy~=1.26",
+    "jax[cpu]~=0.4",
 ]
 
 [project.optional-dependencies]

@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from eleclove.core import (Circuit, Component, Element, INode, Solution, VGround, VNode, VNodeFull)
-from eleclove.utils import NPValue
+from eleclove.core import (Circuit, Component, Element, INode, Rand, Solution, VGround, VNode, VNodeFull)
+from eleclove.utils import NPValue, run_on_cpu
 
 class Resistor(Element):
   def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue):
@@ -11,7 +11,7 @@ class Resistor(Element):
     self._neg = neg
     self.value = value
 
-  def stamp(self, eqs, sol, dt, t):
+  def stamp(self, eqs, state):
     g = 1 / self.value
     eqs.add_a(self._pos, self._pos, g)
     eqs.add_a(self._neg, self._neg, g)
@@ -24,7 +24,7 @@ class CurrentSource(Element):
     self._neg = neg
     self.value = value
 
-  def stamp(self, eqs, sol, dt, t):
+  def stamp(self, eqs, state):
     eqs.add_b(self._pos, -self.value)
     eqs.add_b(self._neg, self.value)
 
@@ -35,7 +35,7 @@ class VoltageSource(Element):
     self._inode = inode if inode is not None else INode()
     self.value = value
 
-  def stamp(self, eqs, sol, dt, t):
+  def stamp(self, eqs, state):
     eqs.add_a(self._inode, self._pos, 1)
     eqs.add_a(self._pos, self._inode, 1)
     eqs.add_a(self._inode, self._neg, -1)
@@ -48,7 +48,8 @@ class Capacitor(Component):
     self._neg = neg
     self.value = value
 
-  def expand(self, sol, dt, t):
+  def expand(self, state):
+    sol, dt = state.sol, state.dt
     v_diff = 0 if sol is None else sol[self._pos] - sol[self._neg]
     g = self.value / dt
     return [
@@ -64,7 +65,8 @@ class Inductor(Component):
     self._inode = INode()
     self.value = value
 
-  def expand(self, sol, dt, t):
+  def expand(self, state):
+    sol, dt = state.sol, state.dt
     i = 0 if sol is None else sol[self._inode]
     r = self.value / dt
     return [
@@ -75,6 +77,10 @@ class Inductor(Component):
 def _main():
   from matplotlib import pyplot as plt
 
+  run_on_cpu()
+
+  rand = Rand.seed(137)
+
   # 直列抵抗でためしてみる
   circuit = Circuit()
   gnd = VGround()
@@ -83,7 +89,7 @@ def _main():
   circuit.add(VoltageSource(va, gnd, 1))
   circuit.add(Resistor(va, vb, 1))
   circuit.add(Resistor(vb, gnd, 3))
-  sol = circuit.solve(None, 0, 0)
+  sol, _ = circuit.solve(None, 0.1, 0.0, rand)
   print(sol)  # A: 1.0V, B: 0.75V
   print()
 
@@ -99,7 +105,7 @@ def _main():
   v_list = []
   sol: Optional[Solution] = None
   for n in range(100):
-    sol = circuit.solve(sol, 0.1, 0.1 * n)
+    sol, _ = circuit.solve(sol, 0.1, 0.1 * n, rand)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()
@@ -107,7 +113,7 @@ def _main():
   v_list = []
   sol: Optional[Solution] = None
   for n in range(10000):
-    sol = circuit.solve(sol, 0.001, 0.001 * n)
+    sol, _ = circuit.solve(sol, 0.001, 0.001 * n, rand)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()
@@ -124,7 +130,7 @@ def _main():
   v_list = []
   sol: Optional[Solution] = None
   for n in range(100):
-    sol = circuit.solve(sol, 0.1, 0.1 * n)
+    sol, _ = circuit.solve(sol, 0.1, 0.1 * n, rand)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()
