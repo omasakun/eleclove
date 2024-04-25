@@ -14,7 +14,7 @@ class CustomResistor(Component):
     self._pos = pos
     self._neg = neg
 
-  def expand(self, sol, dt):
+  def expand(self, sol, dt, t):
     v = 0 if sol is None else sol[self._pos] - sol[self._neg]
     i = -0.05 * v + 0.1 * v**3
     return [
@@ -27,7 +27,7 @@ class WhiteNoise(Component):
     self._neg = neg
     self.value = value
 
-  def expand(self, sol, dt):
+  def expand(self, sol, dt, t):
     i = self.value * np.random.randn()
     return [
         CurrentSource(self._pos, self._neg, i),
@@ -51,7 +51,7 @@ def simulate(time: float, resistor: float, capacitor: float, inductor: float, no
   va_list = []
   sol: Optional[Solution] = None
   for i in range(int(time * 1e-12 / dt)):
-    sol = circuit.solve(sol, dt)
+    sol = circuit.solve(sol, dt, i * dt)
     t_list.append(i * dt)
     va_list.append(sol[va])
 

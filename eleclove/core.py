@@ -8,7 +8,7 @@ from typing import (Any, Optional, OrderedDict, Protocol, Sequence, TypeGuard, U
 
 import numpy as np
 
-from eleclove.utils import NPArray, hex_id
+from eleclove.utils import NPArray, NPValue, hex_id
 
 EqNode = Union["VNode", "INode"]
 EqNodeFull = Union["VNode", "INode", "VGround"]
@@ -61,7 +61,7 @@ class LinearEqs:
     if isinstance(i, VGround): return
     self._b.append((self._node_index(i), value))
 
-  def _prepare(self):
+  def matrices(self):
     n = len(self._names)
     a = np.zeros((n, n))
     b = np.zeros(n)
@@ -73,13 +73,13 @@ class LinearEqs:
     return a, b
 
   def solve(self):
-    a, b = self._prepare()
+    a, b = self.matrices()
     x = np.linalg.solve(a, b)
     return Solution(x, list(self._names.keys()))
 
   def __str__(self):
     # TODO: きれいに表示する
-    a, b = self._prepare()
+    a, b = self.matrices()
     names = map(str, self._names.keys())
     return f"LinearEqs({list(names)}\na=\n{a}, \nb={b}, \n)"
 
@@ -102,15 +102,15 @@ class Solution:
     return "\n".join(lines)
 
 class Element(Protocol):
-  def modify_eqs(self, eqs: LinearEqs, sol: Optional[Solution], dt: float):
+  def stamp(self, eqs: LinearEqs, sol: Optional[Solution], dt: NPValue, t: NPValue):
     ...
 
 class Component(Protocol):
-  def expand(self, sol: Optional[Solution], dt: float) -> Sequence[Union["Element", "Component"]]:
+  def expand(self, sol: Optional[Solution], dt: NPValue, t: NPValue) -> Sequence[Union["Element", "Component"]]:
     ...
 
 def is_element(obj: Any) -> TypeGuard[Element]:
-  return hasattr(obj, "modify_eqs")
+  return hasattr(obj, "stamp")
 
 def is_component(obj: Any) -> TypeGuard[Component]:
   return hasattr(obj, "expand")
@@ -122,16 +122,16 @@ class Circuit:
   def add(self, child: Element | Component):
     self._children.append(child)
 
-  def solve(self, sol: Optional[Solution], dt: float):
+  def solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue):
     eqs = LinearEqs()
 
     queue = self._children.copy()
     while queue:
       child = queue.pop(0)
       if is_element(child):
-        child.modify_eqs(eqs, sol, dt)
+        child.stamp(eqs, sol, dt, t)
       if is_component(child):
-        for child in child.expand(sol, dt):
+        for child in child.expand(sol, dt, t):
           queue.append(child)
 
     # TODO: 前回の計算で使った NpArray を再利用する

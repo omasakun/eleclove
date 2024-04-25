@@ -3,14 +3,15 @@
 from typing import Optional
 
 from eleclove.core import (Circuit, Component, Element, INode, Solution, VGround, VNode, VNodeFull)
+from eleclove.utils import NPValue
 
 class Resistor(Element):
-  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue):
     self._pos = pos
     self._neg = neg
     self.value = value
 
-  def modify_eqs(self, eqs, sol, dt):
+  def stamp(self, eqs, sol, dt, t):
     g = 1 / self.value
     eqs.add_a(self._pos, self._pos, g)
     eqs.add_a(self._neg, self._neg, g)
@@ -18,23 +19,23 @@ class Resistor(Element):
     eqs.add_a(self._neg, self._pos, -g)
 
 class CurrentSource(Element):
-  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue):
     self._pos = pos
     self._neg = neg
     self.value = value
 
-  def modify_eqs(self, eqs, sol, dt):
+  def stamp(self, eqs, sol, dt, t):
     eqs.add_b(self._pos, -self.value)
     eqs.add_b(self._neg, self.value)
 
 class VoltageSource(Element):
-  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float, inode: Optional[INode] = None):
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue, inode: Optional[INode] = None):
     self._pos = pos
     self._neg = neg
     self._inode = inode if inode is not None else INode()
     self.value = value
 
-  def modify_eqs(self, eqs, sol, dt):
+  def stamp(self, eqs, sol, dt, t):
     eqs.add_a(self._inode, self._pos, 1)
     eqs.add_a(self._pos, self._inode, 1)
     eqs.add_a(self._inode, self._neg, -1)
@@ -42,12 +43,12 @@ class VoltageSource(Element):
     eqs.add_b(self._inode, self.value)
 
 class Capacitor(Component):
-  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue):
     self._pos = pos
     self._neg = neg
     self.value = value
 
-  def expand(self, sol, dt):
+  def expand(self, sol, dt, t):
     v_diff = 0 if sol is None else sol[self._pos] - sol[self._neg]
     g = self.value / dt
     return [
@@ -56,14 +57,14 @@ class Capacitor(Component):
     ]
 
 class Inductor(Component):
-  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: float):
+  def __init__(self, pos: VNodeFull, neg: VNodeFull, value: NPValue):
     self._pos = pos
     self._neg = neg
     self._node = VNode()
     self._inode = INode()
     self.value = value
 
-  def expand(self, sol, dt):
+  def expand(self, sol, dt, t):
     i = 0 if sol is None else sol[self._inode]
     r = self.value / dt
     return [
@@ -82,7 +83,7 @@ def _main():
   circuit.add(VoltageSource(va, gnd, 1))
   circuit.add(Resistor(va, vb, 1))
   circuit.add(Resistor(vb, gnd, 3))
-  sol = circuit.solve(None, 0)
+  sol = circuit.solve(None, 0, 0)
   print(sol)  # A: 1.0V, B: 0.75V
   print()
 
@@ -97,16 +98,16 @@ def _main():
 
   v_list = []
   sol: Optional[Solution] = None
-  for _ in range(100):
-    sol = circuit.solve(sol, 0.1)
+  for n in range(100):
+    sol = circuit.solve(sol, 0.1, 0.1 * n)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()
 
   v_list = []
   sol: Optional[Solution] = None
-  for _ in range(10000):
-    sol = circuit.solve(sol, 0.001)
+  for n in range(10000):
+    sol = circuit.solve(sol, 0.001, 0.001 * n)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()
@@ -122,8 +123,8 @@ def _main():
 
   v_list = []
   sol: Optional[Solution] = None
-  for _ in range(100):
-    sol = circuit.solve(sol, 0.1)
+  for n in range(100):
+    sol = circuit.solve(sol, 0.1, 0.1 * n)
     v_list.append(sol[vb])
   plt.plot(v_list)
   plt.show()

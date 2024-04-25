@@ -6,6 +6,7 @@ from typing import Any
 from numpy.typing import NDArray
 
 NPArray = NDArray[Any]
+NPValue = NDArray[Any] | float | int
 
 def hex_id(obj):
   md5_hash = hashlib.md5(hex(id(obj)).encode()).hexdigest()
