@@ -5,7 +5,6 @@
 # TODO: ニュートン法とか使う、収束判定、可変時間ステップ
 
 from dataclasses import dataclass
-from functools import partial
 from typing import Any, Optional, Protocol, Sequence, TypeGuard, Union
 
 import jax.numpy as jnp
@@ -92,6 +91,8 @@ class LinearEqs:
 class Solution:
   """ EqNode でアクセスできる解一覧 """
   def __init__(self, values: NPArray, names: list[EqNode] | dict[EqNode, int]):
+    assert values.ndim == 1 or values.ndim == 2
+    assert values.shape[values.ndim - 1] == len(names)
     self._values = values
     if isinstance(names, list):
       self._names = {name: i for i, name in enumerate(names)}
@@ -103,7 +104,11 @@ class Solution:
 
   def __getitem__(self, key: EqNodeFull):
     if isinstance(key, VGround): return 0
-    return self._values[self._names[key]]
+    if self._values.ndim == 1:
+      return self._values[self._names[key]]
+    if self._values.ndim == 2:
+      return self._values[:, self._names[key]]
+    raise ValueError("Invalid shape")
 
   def __str__(self):
     lines: list[str] = []
@@ -170,10 +175,12 @@ class Circuit:
   def __init__(self):
     self._children: list[Element | Component] = []
     self._jitted_solve = None
+    self._jitted_transient = None
 
   def add(self, child: Element | Component):
     self._children.append(child)
     self._jitted_solve = None
+    self._jitted_transient = None
 
   def solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand]:
     if sol is None:
@@ -186,6 +193,15 @@ class Circuit:
     # print(self._jitted_solve._cache_size())
 
     return self._jitted_solve(sol, dt, t, rand)
+
+  def transient(self, sol: Solution, dt: float, t: NPArray, rand: Rand) -> tuple[Solution, Rand]:
+    if self._jitted_transient is None:
+      self._jitted_transient = jax.jit(self._transient)
+
+    dt_t = jnp.stack((jnp.full(t.shape, dt), t), axis=-1)
+
+    (_, rand), sol = self._jitted_transient(sol, dt_t, rand)
+    return sol, rand
 
   def _solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand):
     eqs = LinearEqs()
@@ -202,3 +218,12 @@ class Circuit:
 
     # TODO: 前回の計算で使った NpArray を再利用する
     return eqs.solve(), rand
+
+  def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand):
+    return jax.lax.scan(self._transient_step, (sol, rand), dt_t)
+
+  def _transient_step(self, carry, dt_t):
+    sol, rand = carry
+    dt, t = dt_t[0], dt_t[1]
+    sol, rand = self._solve(sol, dt, t, rand)
+    return (sol, rand), sol

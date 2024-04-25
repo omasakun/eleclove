@@ -5,4 +5,4 @@ from eleclove.utils import run_on_cpu
 
 if __name__ == "__main__":
   run_on_cpu()
-  example01(1000, 100, 50, 5, 1, False)
+  example01(100000, 100, 50, 5, 1, False)

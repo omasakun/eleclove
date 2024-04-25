@@ -1,12 +1,10 @@
 # %%
 
-from typing import Optional
-
 import numpy as np
 from matplotlib import pyplot as plt
 
 from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
-from eleclove.core import (Circuit, Component, Rand, Solution, VGround, VNode, VNodeFull)
+from eleclove.core import Circuit, Component, Rand, VGround, VNode, VNodeFull
 from eleclove.utils import run_on_cpu
 
 class CustomResistor(Component):
@@ -48,20 +46,16 @@ def example01(time: float, resistor: float, capacitor: float, inductor: float, n
   circuit.add(Capacitor(va, gnd, capacitor * 1e-15))
   circuit.add(CustomResistor(va, gnd))
 
-  dt = 10e-15
-  t_list = []
-  sol_list = []
-  sol: Optional[Solution] = None
   rand = Rand.seed(137)
-  for i in range(int(time * 1e-12 / dt)):
-    sol, rand = circuit.solve(sol, dt, i * dt, rand)
-    t_list.append(i * dt)
-    sol_list.append(sol)
+
+  dt = 10e-15
+  t = np.arange(0, time * 1e-12, dt)
+  sol, rand = circuit.solve(None, dt, 0, rand)
+  sol, rand = circuit.transient(sol, dt, t, rand)
 
   # jax array の値の取得は遅いので numpy array に変換する
   # あと、 python list から jax array への変換も遅かった
-  sol_list = [sol.to_numpy() for sol in sol_list]
-  va_list = np.array([sol[va] for sol in sol_list])
+  va_list = np.array(sol[va])
 
   window = np.hanning(len(va_list))
 
@@ -71,12 +65,13 @@ def example01(time: float, resistor: float, capacitor: float, inductor: float, n
   fft = fft[:len(fft) // 2]
 
   fig1, ax = plt.subplots()
-  ax.plot(t_list, va_list)
-  ax.set_xlabel("Time [s]")
+  ax.set_title(f"Waveform ({len(va_list)} samples)")
+  ax.plot(t * 1e12, va_list)
+  ax.set_xlabel("Time [ps]")
   ax.set_ylabel("Voltage [V]")
 
   fig2, ax = plt.subplots()
-  ax.set_title(f"Peak: {freq[np.argmax(np.abs(fft))]*1e-12:.2f} THz")
+  ax.set_title(f"Peak: {freq[np.argmax(np.abs(fft))]*1e-12:.3f} THz")
   ax.loglog(freq, np.abs(fft))
   ax.set_xlabel("Frequency [Hz]")
   ax.set_ylabel("Magnitude")

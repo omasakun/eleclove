@@ -29,7 +29,7 @@ pnpm install
 
 # これで準備完了です！
 source .venv/bin/activate
-python -m eleclove
+python eleclove/example01.py
 ```
 
 PDM の代わりに `requirements.txt` を使って依存関係をインストールすることもできます。
