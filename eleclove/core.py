@@ -5,6 +5,7 @@
 # TODO: ニュートン法とか使う、収束判定、可変時間ステップ
 
 from dataclasses import dataclass
+from functools import cache
 from typing import Any, Optional, Protocol, Sequence, TypeGuard, Union
 
 import jax.numpy as jnp
@@ -141,7 +142,7 @@ class Rand:
     return _key
 
   def randn(self) -> NPArray:
-    return jax.random.normal(self.next_key())  # type: ignore
+    return jax.random.normal(self.next_key())
 
   def tree_flatten(self):
     return (self._key,), None
@@ -159,11 +160,11 @@ class TransientState:
 
 class Element(Protocol):
   def stamp(self, eqs: LinearEqs, state: TransientState):
-    ...
+    ...  # Jax JIT のトレーシングに対応した処理を書く
 
 class Component(Protocol):
   def expand(self, state: TransientState) -> Sequence[Union["Element", "Component"]]:
-    ...
+    ...  # Jax JIT のトレーシングに対応した処理を書く
 
 def is_element(obj: Any) -> TypeGuard[Element]:
   return hasattr(obj, "stamp")
@@ -174,34 +175,23 @@ def is_component(obj: Any) -> TypeGuard[Component]:
 class Circuit:
   def __init__(self):
     self._children: list[Element | Component] = []
-    self._jitted_solve = None
-    self._jitted_transient = None
 
   def add(self, child: Element | Component):
     self._children.append(child)
-    self._jitted_solve = None
-    self._jitted_transient = None
+    self._solve_jit.cache_clear()
+    self._transient_jit.cache_clear()
 
   def solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand]:
-    if sol is None:
-      return self._solve(sol, dt, t, rand)
-
-    if self._jitted_solve is None:
-      self._jitted_solve = jax.jit(self._solve)
+    if sol is None: return self._solve(sol, dt, t, rand)
 
     # 何通りの JIT コンパイルが行われたか確認する
     # print(self._jitted_solve._cache_size())
 
-    return self._jitted_solve(sol, dt, t, rand)
+    return self._solve_jit()(sol, dt, t, rand)
 
-  def transient(self, sol: Solution, dt: float, t: NPArray, rand: Rand) -> tuple[Solution, Rand]:
-    if self._jitted_transient is None:
-      self._jitted_transient = jax.jit(self._transient)
-
-    dt_t = jnp.stack((jnp.full(t.shape, dt), t), axis=-1)
-
-    (_, rand), sol = self._jitted_transient(sol, dt_t, rand)
-    return sol, rand
+  @cache
+  def _solve_jit(self):
+    return jax.jit(self._solve)
 
   def _solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand):
     eqs = LinearEqs()
@@ -216,14 +206,29 @@ class Circuit:
         for child in child.expand(state):
           queue.append(child)
 
-    # TODO: 前回の計算で使った NpArray を再利用する
     return eqs.solve(), rand
 
-  def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand):
-    return jax.lax.scan(self._transient_step, (sol, rand), dt_t)
+  def transient(self, sol: Optional[Solution], dt: float, t: NPArray, rand: Rand) -> tuple[Solution, Rand]:
+    if sol is None:
+      sol0, rand = self.solve(sol, dt, 0, rand)
+      sols, rand = self.transient(sol0, dt, t[1:], rand)
+      sols._values = jnp.concatenate((jnp.expand_dims(sol0._values, axis=0), sols._values), axis=0)
+      return sols, rand
 
-  def _transient_step(self, carry, dt_t):
-    sol, rand = carry
-    dt, t = dt_t[0], dt_t[1]
-    sol, rand = self._solve(sol, dt, t, rand)
-    return (sol, rand), sol
+    dt_t = jnp.stack((jnp.full(t.shape, dt), t), axis=-1)
+
+    (_, rand), sols = self._transient_jit()(sol, dt_t, rand)
+    return sols, rand
+
+  @cache
+  def _transient_jit(self):
+    return jax.jit(self._transient)
+
+  def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand):
+    def step(carry, dt_t):
+      sol, rand = carry
+      dt, t = dt_t
+      sol, rand = self._solve(sol, dt, t, rand)
+      return (sol, rand), sol
+
+    return jax.lax.scan(step, (sol, rand), dt_t)

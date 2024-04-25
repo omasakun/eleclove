@@ -1,11 +1,14 @@
 # %%
 
+from math import sqrt
+
+import jax
 import numpy as np
 from matplotlib import pyplot as plt
 
 from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
 from eleclove.core import Circuit, Component, Rand, VGround, VNode, VNodeFull
-from eleclove.utils import run_on_cpu
+from eleclove.utils import NPArray, run_on_cpu
 
 class CustomResistor(Component):
   def __init__(self, pos: VNodeFull, neg: VNodeFull):
@@ -33,7 +36,8 @@ class WhiteNoise(Component):
         CurrentSource(self._pos, self._neg, i),
     ]
 
-def example01(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
+@jax.jit
+def example01_transient(dt: float, t: NPArray, resistor: float, capacitor: float, inductor: float, noise: float):
   circuit = Circuit()
   gnd = VGround()
 
@@ -48,14 +52,18 @@ def example01(time: float, resistor: float, capacitor: float, inductor: float, n
 
   rand = Rand.seed(137)
 
+  sol, rand = circuit.transient(None, dt, t, rand)
+
+  return sol[va]
+
+def example01(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
   dt = 10e-15
   t = np.arange(0, time * 1e-12, dt)
-  sol, rand = circuit.solve(None, dt, 0, rand)
-  sol, rand = circuit.transient(sol, dt, t, rand)
+  sol_va = example01_transient(dt, t, resistor, capacitor, inductor, noise)
 
   # jax array の値の取得は遅いので numpy array に変換する
   # あと、 python list から jax array への変換も遅かった
-  va_list = np.array(sol[va])
+  va_list = np.array(sol_va)
 
   window = np.hanning(len(va_list))
 
@@ -70,8 +78,10 @@ def example01(time: float, resistor: float, capacitor: float, inductor: float, n
   ax.set_xlabel("Time [ps]")
   ax.set_ylabel("Voltage [V]")
 
+  theoretical_freq = 100 / sqrt(inductor * capacitor * 10) / (2 * np.pi)
+
   fig2, ax = plt.subplots()
-  ax.set_title(f"Peak: {freq[np.argmax(np.abs(fft))]*1e-12:.3f} THz")
+  ax.set_title(f"Peak: {freq[np.argmax(np.abs(fft))]*1e-12:.3f} THz (Theoretical: {theoretical_freq:.3f} THz)")
   ax.loglog(freq, np.abs(fft))
   ax.set_xlabel("Frequency [Hz]")
   ax.set_ylabel("Magnitude")
@@ -90,8 +100,8 @@ def _main():
   demo = gr.Interface(
       fn=example01,
       inputs=[
-          gr.Slider(value=100, maximum=1000, label="Time [ps]"),
-          gr.Slider(value=100, maximum=10000, label="Resistor [Ω]"),
+          gr.Slider(value=100, minimum=100, maximum=10000, step=100, label="Time [ps]"),
+          gr.Slider(value=100, maximum=100, label="Resistor [Ω]"),
           gr.Slider(value=50, label="Capacitor [pF]"),
           gr.Slider(value=5, label="Inductor [fH]"),
           gr.Slider(value=1, label="Noise [μV]"),

@@ -4,12 +4,14 @@ import hashlib
 from typing import Any
 
 import jax
+from jax import Array
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
 # TODO: これらの型宣言はドキュメンテーションとオートコンプリートのためにつけているけど、型チェックには弱いかも
-NPArray = NDArray[Any]
-NPValue = NDArray[Any] | float | int
+NPArray = Array | NDArray[Any]
+NPValue = Array | NDArray[Any] | float | int
+NPBool = Array | NDArray[Any] | bool
 KeyArray = ArrayLike  # key for random number generator
 
 def hex_id(obj):
