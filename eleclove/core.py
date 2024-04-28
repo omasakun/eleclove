@@ -13,7 +13,11 @@ import jax.random
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 
-from eleclove.utils import KeyArray, NPArray, NPValue, hex_id
+from eleclove.utils import KeyArray, NPArray, NPBool, NPValue, hex_id
+
+MAX_ITER = 100
+RELTOL_V = 1e-3
+ABSTOL_V = 1e-6
 
 EqNode = Union["VNode", "INode"]
 EqNodeFull = Union["VNode", "INode", "VGround"]
@@ -103,6 +107,20 @@ class Solution:
   def to_numpy(self):
     return Solution(np.array(self._values), self._names)
 
+  @staticmethod
+  def is_converged(prev: "Solution", crnt: "Solution"):
+    # TODO: 電流も判定に含めるべきだし、ノードとして設定されていない電圧・電流も含めるべき
+    # TODO: 非線形特性の素子では、あらためて今の電圧から推定される電流との差を確認したほうがいい気がする
+    assert prev._values.ndim == 1
+    assert crnt._values.ndim == 1
+    v_prev = []
+    v_crnt = []
+    for name in prev._names:
+      if isinstance(name, VNode):
+        v_prev.append(prev[name])
+        v_crnt.append(crnt[name])
+    return jnp.allclose(jnp.array(v_crnt), jnp.array(v_prev), rtol=RELTOL_V, atol=ABSTOL_V)
+
   def __getitem__(self, key: EqNodeFull):
     if isinstance(key, VGround): return 0
     if self._values.ndim == 1:
@@ -172,6 +190,10 @@ def is_element(obj: Any) -> TypeGuard[Element]:
 def is_component(obj: Any) -> TypeGuard[Component]:
   return hasattr(obj, "expand")
 
+class ConvergenceError(Exception):
+  def __init__(self):
+    super().__init__("Not converged")
+
 class Circuit:
   def __init__(self):
     self._children: list[Element | Component] = []
@@ -179,9 +201,13 @@ class Circuit:
   def add(self, child: Element | Component):
     self._children.append(child)
     self._solve_jit.cache_clear()
+    self._newton_jit.cache_clear()
     self._transient_jit.cache_clear()
 
   def solve(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand]:
+    """ 線形方程式を解く。収束するまで解を更新したいときは newton メソッドを使う。 """
+
+    # コンパイル時間がかさむだけなので、そのまま実行する
     if sol is None: return self._solve(sol, dt, t, rand)
 
     # 何通りの JIT コンパイルが行われたか確認する
@@ -208,16 +234,53 @@ class Circuit:
 
     return eqs.solve(), rand
 
+  def newton(self, sol: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand, NPBool]:
+    """ 非線形方程式を解く。 """
+
+    if sol is None: sol, rand = self.solve(sol, dt, t, rand)
+    return self._newton_jit()(sol, dt, t, rand)
+
+  @cache
+  def _newton_jit(self):
+    return jax.jit(self._newton)
+
+  def _newton(self, sol: Solution, dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand, NPBool]:
+    # ニュートン法での solve 呼び出しでは、毎回同じ乱数シードを使用する
+
+    def check(state):
+      prev, crnt, iters, _, _, _ = state
+      jax.debug.print("{prev} -> {crnt}", prev=prev._values, crnt=crnt._values)
+      return jnp.logical_and(jnp.logical_not(Solution.is_converged(prev, crnt)), iters < MAX_ITER)
+
+    def step(state):
+      prev, crnt, iters, dt, t, rand = state
+      prev = crnt
+      crnt, _ = self.solve(prev, dt, t, rand)
+      iters += 1
+      return prev, crnt, iters, dt, t, rand
+
+    prev = sol
+    crnt, rand_next = self.solve(sol, dt, t, rand)
+    state = (prev, crnt, jnp.array(1), dt, t, rand)
+
+    state = jax.lax.while_loop(check, step, state)
+
+    _, crnt, iters, _, _, _ = state
+    jax.debug.print("Newton: {iters} iterations", iters=iters)
+    return crnt, rand_next, iters < MAX_ITER
+
   def transient(self, sol: Optional[Solution], dt: float, t: NPArray, rand: Rand) -> tuple[Solution, Rand]:
     if sol is None:
-      sol0, rand = self.solve(sol, dt, 0, rand)
+      sol0, rand, converged = self.newton(sol, dt, 0, rand)
+      if not converged: raise ConvergenceError()
       sols, rand = self.transient(sol0, dt, t[1:], rand)
       sols._values = jnp.concatenate((jnp.expand_dims(sol0._values, axis=0), sols._values), axis=0)
       return sols, rand
 
     dt_t = jnp.stack((jnp.full(t.shape, dt), t), axis=-1)
 
-    (_, rand), sols = self._transient_jit()(sol, dt_t, rand)
+    (_, rand, converged), sols = self._transient_jit()(sol, dt_t, rand)
+    if not converged: raise ConvergenceError()
     return sols, rand
 
   @cache
@@ -226,9 +289,14 @@ class Circuit:
 
   def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand):
     def step(carry, dt_t):
-      sol, rand = carry
+      sol, rand, converged = carry
       dt, t = dt_t
-      sol, rand = self._solve(sol, dt, t, rand)
-      return (sol, rand), sol
+      sol, rand, converged = jax.lax.cond(
+          converged,
+          lambda args: self.newton(*args),
+          lambda args: (args[0], args[3], False),
+          (sol, dt, t, rand),
+      )
+      return (sol, rand, converged), sol
 
-    return jax.lax.scan(step, (sol, rand), dt_t)
+    return jax.lax.scan(step, (sol, rand, True), dt_t)
