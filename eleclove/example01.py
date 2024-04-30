@@ -16,7 +16,7 @@ class CustomResistor(Component):
     self._neg = neg
 
   def expand(self, state):
-    sol = state.sol
+    sol = state.sol_crnt
     v = 0 if sol is None else sol[self._pos] - sol[self._neg]
     i = -0.05 * v + 0.1 * v**3
     return [
@@ -52,14 +52,15 @@ def example01_transient(dt: float, t: NPArray, resistor: float, capacitor: float
 
   rand = Rand.seed(137)
 
-  sol, rand = circuit.transient(None, dt, t, rand)
+  sol, rand, converged = circuit.transient(None, dt, t, rand)
 
-  return sol[va]
+  return sol[va], converged
 
 def example01(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
   dt = 10e-15
   t = np.arange(0, time * 1e-12, dt)
-  sol_va = example01_transient(dt, t, resistor, capacitor, inductor, noise)
+  sol_va, converged = example01_transient(dt, t, resistor, capacitor, inductor, noise)
+  assert converged, "Not converged"
 
   # jax array の値の取得は遅いので numpy array に変換する
   # あと、 python list から jax array への変換も遅かった
@@ -113,6 +114,6 @@ def _main():
       ],
       live=True,
   )
-  demo.launch()
+  demo.launch(show_error=True)
 
 if __name__ == "__main__": _main()

@@ -49,7 +49,7 @@ class Capacitor(Component):
     self.value = value
 
   def expand(self, state):
-    sol, dt = state.sol, state.dt
+    sol, dt = state.sol_prev, state.dt
     v_diff = 0 if sol is None else sol[self._pos] - sol[self._neg]
     g = self.value / dt
     return [
@@ -66,7 +66,7 @@ class Inductor(Component):
     self.value = value
 
   def expand(self, state):
-    sol, dt = state.sol, state.dt
+    sol, dt = state.sol_prev, state.dt
     i = 0 if sol is None else sol[self._inode]
     r = self.value / dt
     return [
@@ -89,7 +89,7 @@ def _main():
   circuit.add(VoltageSource(va, gnd, 1))
   circuit.add(Resistor(va, vb, 1))
   circuit.add(Resistor(vb, gnd, 3))
-  sol, _ = circuit.solve(None, 0.1, 0.0, rand)
+  sol, _ = circuit.solve(None, None, 0.1, 0.0, rand)
   print(sol)  # A: 1.0V, B: 0.75V
   print()
 
@@ -105,16 +105,28 @@ def _main():
   v_list = []
   sol: Optional[Solution] = None
   for n in range(100):
-    sol, _ = circuit.solve(sol, 0.1, 0.1 * n, rand)
+    sol, _ = circuit.solve(sol, sol, 0.1, 0.1 * n, rand)
     v_list.append(sol[vb])
+  plt.title(f"Capacitor (100 steps)")
+  plt.plot(v_list)
+  plt.show()
+
+  v_list = []
+  sol: Optional[Solution] = None
+  for n in range(100):
+    sol, _, converged = circuit.newton(sol, sol, 0.1, 0.1 * n, rand)
+    v_list.append(sol[vb])
+    assert converged
+  plt.title(f"Capacitor (100 steps, Newton)")
   plt.plot(v_list)
   plt.show()
 
   v_list = []
   sol: Optional[Solution] = None
   for n in range(10000):
-    sol, _ = circuit.solve(sol, 0.001, 0.001 * n, rand)
+    sol, _ = circuit.solve(sol, sol, 0.001, 0.001 * n, rand)
     v_list.append(sol[vb])
+  plt.title(f"Capacitor (10000 steps)")
   plt.plot(v_list)
   plt.show()
 
@@ -130,8 +142,9 @@ def _main():
   v_list = []
   sol: Optional[Solution] = None
   for n in range(100):
-    sol, _ = circuit.solve(sol, 0.1, 0.1 * n, rand)
+    sol, _ = circuit.solve(sol, sol, 0.1, 0.1 * n, rand)
     v_list.append(sol[vb])
+  plt.title(f"Inductor (100 steps)")
   plt.plot(v_list)
   plt.show()
 
