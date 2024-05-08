@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
-from eleclove.core import Circuit, Component, DcMode, Rand, VGround, VNode, VNodeFull
+from eleclove.core import (Circuit, Component, DcMode, Rand, VGround, VNode, VNodeFull)
 from eleclove.utils import NPArray, run_on_cpu
 
 class CustomResistor(Component):
@@ -48,7 +48,6 @@ def example01_transient(dt: float, t: NPArray, resistor: float, capacitor: float
   circuit.add(Resistor(va, gnd, resistor))
   circuit.add(Inductor(va, gnd, inductor * 1e-12))
   circuit.add(Capacitor(va, gnd, capacitor * 1e-15))
-  circuit.add(CustomResistor(va, gnd))
 
   rand = Rand.seed(137)
 
