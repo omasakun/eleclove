@@ -5,7 +5,7 @@ from typing import Optional
 
 import jax
 
-from eleclove.core import (Component, Element, INode, VNode, VNodeFull)
+from eleclove.core import Component, Element, INode, VNode, VNodeFull
 from eleclove.utils import NPValue
 
 class Resistor(Element):

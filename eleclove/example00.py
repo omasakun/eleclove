@@ -1,13 +1,16 @@
 # %%
 
-from matplotlib import pyplot as plt
-import numpy as np
+# うまく実装できているか確認するために使ったコード
+# 実行速度をあまり気にしていない
 
 from typing import Optional
 
+import numpy as np
+from matplotlib import pyplot as plt
+
+from eleclove.components import Capacitor, Inductor, Resistor, VoltageSource
 from eleclove.core import (AcMode, Circuit, DcMode, Rand, Solution, VGround, VNode)
 from eleclove.utils import run_on_cpu
-from eleclove.components import VoltageSource, Capacitor, Resistor, Inductor
 
 run_on_cpu()
 

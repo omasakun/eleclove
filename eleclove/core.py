@@ -1,9 +1,5 @@
 # %%
 
-# あとで整理する
-# まずは性能を無視して開発して、あとから最適化する
-# TODO: ニュートン法とか使う、収束判定、可変時間ステップ
-
 from dataclasses import dataclass
 from functools import cache
 from typing import Any, NamedTuple, Optional, Sequence, TypeGuard, Union
@@ -271,6 +267,7 @@ class Circuit:
              mode: SolveMode) -> tuple[Solution, Rand, NPBool]:
     """ 非線形方程式を解く。 """
 
+    # JIT コンパイルの回数が無駄に増えるのを防ぐため、 sol_crnt == None の場合の対処は JIT の外で行う
     if sol_crnt is None: sol_crnt, rand = self.solve(sol_prev, sol_crnt, dt, t, rand, mode)
     return self._newton_jit()(sol_prev, sol_crnt, dt, t, rand, mode=mode)
 
@@ -303,6 +300,7 @@ class Circuit:
     return crnt, rand_next, iters < MAX_ITER
 
   def transient(self, sol: Optional[Solution], dt: float, t: NPArray, rand: Rand, mode: SolveMode) -> tuple[Solution, Rand, NPBool]:
+    # JIT コンパイルの回数が無駄に増えるのを防ぐため、 sol == None の場合の対処は JIT の外で行う
     if sol is None:
 
       def continue_transient(sol0, dt, t, rand):

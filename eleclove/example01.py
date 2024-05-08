@@ -1,10 +1,11 @@
 # %%
 
+# 発振の UI 付きシミュレーターの実装例
+# jax.jit を使って、さらなる高速化をしている
+
 from math import sqrt
 
 import jax
-import numpy as np
-from matplotlib import pyplot as plt
 
 from eleclove.components import Capacitor, CurrentSource, Inductor, Resistor
 from eleclove.core import (Circuit, Component, DcMode, Rand, VGround, VNode, VNodeFull)
@@ -56,6 +57,9 @@ def example01_transient(dt: float, t: NPArray, resistor: float, capacitor: float
   return sol[va], converged
 
 def example01(time: float, resistor: float, capacitor: float, inductor: float, noise: float, hann: bool = False):
+  import numpy as np
+  from matplotlib import pyplot as plt
+
   dt = 10e-15
   t = np.arange(0, time * 1e-12, dt)
   sol_va, converged = example01_transient(dt, t, resistor, capacitor, inductor, noise)
@@ -90,10 +94,6 @@ def example01(time: float, resistor: float, capacitor: float, inductor: float, n
 
 def _main():
   import gradio as gr
-
-  # use global variable 'demo'
-  # see: https://www.gradio.app/guides/developing-faster-with-reload-mode
-  global demo
 
   run_on_cpu()
 
