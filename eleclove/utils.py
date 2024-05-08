@@ -1,7 +1,7 @@
 # %%
 
 import hashlib
-from typing import Any
+from typing import Any, NoReturn
 
 import jax
 from jax import Array
@@ -20,3 +20,6 @@ def hex_id(obj):
 
 def run_on_cpu():
   jax.config.update('jax_platform_name', "cpu")
+
+def never(x: NoReturn):
+  raise AssertionError(f"Unreachable code: {x}")

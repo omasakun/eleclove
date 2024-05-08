@@ -6,14 +6,14 @@
 
 from dataclasses import dataclass
 from functools import cache
-from typing import Any, Optional, Protocol, Sequence, TypeGuard, Union
+from typing import Any, NamedTuple, Optional, Sequence, TypeGuard, Union
 
 import jax.numpy as jnp
 import jax.random
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 
-from eleclove.utils import KeyArray, NPArray, NPBool, NPValue, hex_id
+from eleclove.utils import KeyArray, NPArray, NPBool, NPValue, hex_id, never
 
 MAX_ITER = 100
 RELTOL_V = 1e-3
@@ -70,10 +70,10 @@ class LinearEqs:
     if isinstance(i, VGround): return
     self._b.append((self._node_index(i), value))
 
-  def matrices(self):
+  def matrices(self, dtype):
     n = len(self._names)
-    a = jnp.zeros((n, n))
-    b = jnp.zeros(n)
+    a = jnp.zeros((n, n), dtype)
+    b = jnp.zeros(n, dtype)
     for i, j, value in self._a:
       a = a.at[i, j].add(value)
     for i, value in self._b:
@@ -81,14 +81,18 @@ class LinearEqs:
 
     return a, b
 
-  def solve(self):
-    a, b = self.matrices()
+  def solve(self, dtype):
+    a, b = self.matrices(dtype)
     x = jnp.linalg.solve(a, b)
+    # print("A: \n", a)
+    # print("B: ", b)
+    # print("X: ", x)
+    # print()
     return Solution(x, list(self._names.keys()))
 
   def __str__(self):
     # TODO: きれいに表示する
-    a, b = self.matrices()
+    a, b = self.matrices(jnp.complex64)
     names = map(str, self._names.keys())
     return f"LinearEqs({list(names)}\na=\n{a}, \nb={b}, \n)"
 
@@ -177,19 +181,35 @@ class TransientState:
   t: NPValue
   rand: Rand
 
-class Element(Protocol):
+class Element:
   def stamp(self, eqs: LinearEqs, state: TransientState):
-    ...  # Jax JIT のトレーシングに対応した処理を書く
+    raise NotImplementedError()  # Jax JIT のトレーシングに対応した処理を書く
 
-class Component(Protocol):
+  def stamp_ac(self, eqs: LinearEqs, state: TransientState, freq: NPValue):
+    raise NotImplementedError()  # Jax JIT のトレーシングに対応した処理を書く
+
+class Component:
   def expand(self, state: TransientState) -> Sequence[Union["Element", "Component"]]:
-    ...  # Jax JIT のトレーシングに対応した処理を書く
+    raise NotImplementedError()  # Jax JIT のトレーシングに対応した処理を書く
+
+  def expand_ac(self, state: TransientState, freq: NPValue) -> Sequence[Union["Element", "Component"]]:
+    raise NotImplementedError()  # Jax JIT のトレーシングに対応した処理を書く
 
 def is_element(obj: Any) -> TypeGuard[Element]:
   return hasattr(obj, "stamp")
 
 def is_component(obj: Any) -> TypeGuard[Component]:
   return hasattr(obj, "expand")
+
+# algebraic data type
+# uses NamedTuple instead of DataClass because of hashability
+SolveMode = Union["DcMode", "AcMode"]
+
+class DcMode(NamedTuple):
+  pass  # no additional parameters
+
+class AcMode(NamedTuple):
+  freq: NPValue
 
 class Circuit:
   def __init__(self):
@@ -201,19 +221,22 @@ class Circuit:
     self._newton_jit.cache_clear()
     self._transient_jit.cache_clear()
 
-  def solve(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand]:
+  def solve(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand, mode: SolveMode) -> tuple[Solution, Rand]:
     """ 線形方程式を解く。収束するまで解を更新したいときは newton メソッドを使う。 """
 
     # 何通りの JIT コンパイルが行われたか確認する
     # print(self._jitted_solve._cache_size())
 
-    return self._solve_jit()(sol_prev, sol_crnt, dt, t, rand)
+    return self._solve_jit()(sol_prev, sol_crnt, dt, t, rand, mode=mode)
 
   @cache
   def _solve_jit(self):
-    return jax.jit(self._solve)
+    # TODO: モード変更の正しい扱い方を考える : AC, DC でそれぞれ一つの JIT cache を作らせたい
+    return jax.jit(self._solve)  # , static_argnames=("mode"))
 
-  def _solve(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand):
+  def _solve(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand, *, mode: SolveMode):
+    """ 線形化された方程式を解く。 """
+
     eqs = LinearEqs()
     state = TransientState(sol_prev, sol_crnt, dt, t, rand)
 
@@ -221,24 +244,41 @@ class Circuit:
     while queue:
       child = queue.pop(0)
       if is_element(child):
-        child.stamp(eqs, state)
+        match mode:
+          case DcMode():
+            child.stamp(eqs, state)
+          case AcMode(freq):
+            child.stamp_ac(eqs, state, freq)
+          case _:
+            never(mode)
       if is_component(child):
-        for child in child.expand(state):
-          queue.append(child)
+        children: Sequence[Union[Element, Component]] = []
+        match mode:
+          case DcMode():
+            children = child.expand(state)
+          case AcMode(freq):
+            children = child.expand_ac(state, freq)
+          case _:
+            never(mode)
+        for c in children:
+          queue.append(c)
 
-    return eqs.solve(), rand
+    dtype = jnp.complex64 if isinstance(mode, AcMode) else jnp.float32
 
-  def newton(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand, NPBool]:
+    return eqs.solve(dtype), rand
+
+  def newton(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand,
+             mode: SolveMode) -> tuple[Solution, Rand, NPBool]:
     """ 非線形方程式を解く。 """
 
-    if sol_crnt is None: sol_crnt, rand = self.solve(sol_prev, sol_crnt, dt, t, rand)
-    return self._newton_jit()(sol_prev, sol_crnt, dt, t, rand)
+    if sol_crnt is None: sol_crnt, rand = self.solve(sol_prev, sol_crnt, dt, t, rand, mode)
+    return self._newton_jit()(sol_prev, sol_crnt, dt, t, rand, mode=mode)
 
   @cache
   def _newton_jit(self):
-    return jax.jit(self._newton)
+    return jax.jit(self._newton)  # , static_argnames=("mode"))
 
-  def _newton(self, sol_prev: Optional[Solution], sol_crnt: Solution, dt: NPValue, t: NPValue, rand: Rand) -> tuple[Solution, Rand, NPBool]:
+  def _newton(self, sol_prev: Optional[Solution], sol_crnt: Solution, dt: NPValue, t: NPValue, rand: Rand, *, mode: SolveMode) -> tuple[Solution, Rand, NPBool]:
     # ニュートン法での solve 呼び出しでは、毎回同じ乱数シードを使用する
 
     def check(state):
@@ -249,11 +289,11 @@ class Circuit:
     def step(state):
       prev, crnt, iters, dt, t, rand = state
       prev = crnt
-      crnt, _ = self.solve(sol_prev, crnt, dt, t, rand)
+      crnt, _ = self.solve(sol_prev, crnt, dt, t, rand, mode)
       iters += 1
       return prev, crnt, iters, dt, t, rand
 
-    crnt, rand_next = self.solve(sol_prev, sol_crnt, dt, t, rand)
+    crnt, rand_next = self.solve(sol_prev, sol_crnt, dt, t, rand, mode)
     state = (sol_crnt, crnt, jnp.array(1), dt, t, rand)
 
     state = jax.lax.while_loop(check, step, state)
@@ -262,11 +302,11 @@ class Circuit:
     # jax.debug.print("Newton: {iters} iterations", iters=iters)
     return crnt, rand_next, iters < MAX_ITER
 
-  def transient(self, sol: Optional[Solution], dt: float, t: NPArray, rand: Rand) -> tuple[Solution, Rand, NPBool]:
+  def transient(self, sol: Optional[Solution], dt: float, t: NPArray, rand: Rand, mode: SolveMode) -> tuple[Solution, Rand, NPBool]:
     if sol is None:
 
       def continue_transient(sol0, dt, t, rand):
-        sols, rand, converged = self.transient(sol0, dt, t[1:], rand)
+        sols, rand, converged = self.transient(sol0, dt, t[1:], rand, mode)
         sols._values = jnp.concatenate((jnp.expand_dims(sol0._values, axis=0), sols._values), axis=0)
         return sols, rand, converged
 
@@ -275,7 +315,7 @@ class Circuit:
         sol0._values = jnp.zeros((len(t), len(sol0._values)))
         return sol0, rand, False
 
-      sol0, rand, converged = self.newton(sol, sol, dt, 0, rand)
+      sol0, rand, converged = self.newton(sol, sol, dt, 0, rand, mode)
       sols, rand, converged = jax.lax.cond(
           converged,
           lambda: continue_transient(sol0, dt, t, rand),
@@ -285,20 +325,20 @@ class Circuit:
 
     dt_t = jnp.stack((jnp.full(t.shape, dt), t), axis=-1)
 
-    (_, rand, converged), sols = self._transient_jit()(sol, dt_t, rand)
+    (_, rand, converged), sols = self._transient_jit()(sol, dt_t, rand, mode=mode)
     return sols, rand, converged
 
   @cache
   def _transient_jit(self):
-    return jax.jit(self._transient)
+    return jax.jit(self._transient)  # , static_argnames=("mode"))
 
-  def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand):
+  def _transient(self, sol: Solution, dt_t: NPArray, rand: Rand, mode: SolveMode):
     def step(carry, dt_t):
       sol, rand, converged = carry
       dt, t = dt_t
       sol, rand, converged = jax.lax.cond(
           converged,
-          lambda: self.newton(sol, sol, dt, t, rand),
+          lambda: self.newton(sol, sol, dt, t, rand, mode),
           lambda: (sol, rand, converged),
       )
       return (sol, rand, converged), sol
