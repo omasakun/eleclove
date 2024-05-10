@@ -12,6 +12,7 @@ dependencies = [
 visualize = [
     "gradio~=4.27",
     "matplotlib~=3.8",
+    "optuna~=3.6",
 ]
 
 [tool.pdm.dev-dependencies]
