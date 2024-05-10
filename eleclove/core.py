@@ -217,6 +217,16 @@ class Circuit:
     self._newton_jit.cache_clear()
     self._transient_jit.cache_clear()
 
+  def _cache_info(self):
+    result = {}
+    if self._solve_jit.cache_info().currsize > 0:
+      result["solve"] = self._solve_jit()._cache_size()  # pyright: ignore
+    if self._newton_jit.cache_info().currsize > 0:
+      result["newton"] = self._newton_jit()._cache_size()  # pyright: ignore
+    if self._transient_jit.cache_info().currsize > 0:
+      result["transient"] = self._transient_jit()._cache_size()  # pyright: ignore
+    return result
+
   def solve(self, sol_prev: Optional[Solution], sol_crnt: Optional[Solution], dt: NPValue, t: NPValue, rand: Rand, mode: SolveMode) -> tuple[Solution, Rand]:
     """ 線形方程式を解く。収束するまで解を更新したいときは newton メソッドを使う。 """
 

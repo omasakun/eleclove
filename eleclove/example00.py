@@ -35,6 +35,12 @@ plt.plot(f_list, 20 * np.log10(np.real(v_list)))
 plt.xscale("log")
 plt.show()
 
+plt.title("High-pass filter (CR) [phase]")
+plt.plot(f_list, (np.angle(v_list, deg=True) + 180) % 360 - 180)
+plt.ylim(0, 90)
+plt.xscale("log")
+plt.show()
+
 # ハイパスフィルター
 circuit = Circuit()
 gnd = VGround()
@@ -51,6 +57,12 @@ for f in np.logspace(0, 6, 100):
   v_list.append(sol[vb])
 plt.title("High-pass filter (LR) [dB]")
 plt.plot(f_list, 20 * np.log10(np.real(v_list)))
+plt.xscale("log")
+plt.show()
+
+plt.title("High-pass filter (CR) [phase]")
+plt.plot(f_list, (np.angle(v_list, deg=True) + 180) % 360 - 180)
+plt.ylim(0, 90)
 plt.xscale("log")
 plt.show()
 
